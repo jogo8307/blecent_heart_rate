@@ -46,9 +46,14 @@
 //static int blecent_gap_event(struct ble_gap_event *event, void *arg);
 
 static uint16_t m_connection_handle;
+static uint16_t m_attr_handle;
 
 static const ble_uuid16_t predef_uuid = BLE_UUID16_INIT(0x180D);
-static const ble_uuid16_t heart_rate_uuid = BLE_UUID16_INIT(0x2a37);
+static const ble_uuid16_t heart_rate_uuid = BLE_UUID16_INIT(0x2A37);
+
+//static int gatt_mtu_cb(uint16_t conn_handle,
+//                            const struct ble_gatt_error *error,
+//                            uint16_t mtu, void *arg);
 
 static int gatt_discovery_cb(uint16_t conn_handle,
                                  const struct ble_gatt_error *error,
@@ -75,8 +80,6 @@ static int gatt_discovery_cb(uint16_t conn_handle,
 	(void)arg;
 	(void)conn_handle;
 
-		if (error->status == 0)
-		{
 			int uuid_cmp_result = ble_uuid_cmp(&predef_uuid.u, &service->uuid.u16.u);
 			if( uuid_cmp_result == 0)
 			{
@@ -85,11 +88,7 @@ static int gatt_discovery_cb(uint16_t conn_handle,
 						service->end_handle , &heart_rate_uuid.u,
 						find_heart_rate_chr_cb, NULL);
 			}
-		}
-		else
-		{
 			printf("discovery event error 0x%x\n", error->status);
-		}
 
 		return 0;
 }
@@ -159,29 +158,8 @@ scan_event(struct ble_gap_event *event, void *arg)
 		for ( counter = 0; counter < parsed_fields.num_uuids16; counter++)
 		{
 		uuid_cmp_result = ble_uuid_cmp(&predef_uuid.u, &parsed_fields.uuids16[counter].u);
-		printf("\n uuids16.%d %x",counter, parsed_fields.uuids16[counter].value);
 		if (uuid_cmp_result) {
 			puts("UUID doesn't fit\n");
-			//            printf("UUID: ");
-			//		    uint8_t counter;
-			//		    for (counter = 5; counter != 0; counter--)
-			//		    {
-			//			    printf( "%x:",event->disc.addr.val[counter]);
-			//		    }
-			//		    puts("\n");
-			//
-			//		    for (counter = 15; counter != 0; counter--)
-			//		    {
-			//			    printf("%x",parsed_fields.uuids128->value[counter]);
-			//		    }
-			//		    if (parsed_fields.num_uuids16 > 0)
-			//		    {
-			//			    for (counter = 0; counter < parsed_fields.num_uuids16; counter++)
-			//			    {
-			//				    printf("\n uuids16.%d %x",counter, parsed_fields.uuids16[counter].value);
-			//			    }
-			//		    }
-			//		    puts("\n");
 		} else {
 			puts("UUID fits, connecting...\n");
 			ble_gap_disc_cancel();
@@ -193,7 +171,7 @@ scan_event(struct ble_gap_event *event, void *arg)
 	}
         break;
     case BLE_GAP_EVENT_DISC_COMPLETE:
-        printf("Discovery completed, reason: %d\n",
+        printf("Discovery completed, reason: %x\n",
                     event->disc_complete.reason);
         break;
     default:
@@ -217,7 +195,7 @@ scan(void)
         - limited - should limited discovery be used
         - passive - should passive scan be used
         - filter duplicates - 1 enables filtering duplicated advertisements */
-    const struct ble_gap_disc_params scan_params = {10000, 500, 0, 0, 0, 0};
+    const struct ble_gap_disc_params scan_params = {1000, 200, 0, 0, 0, 0};
 
     /* performs discovery procedure */
     rc = ble_gap_disc(nimble_riot_own_addr_type, 10000, &scan_params,scan_event, NULL);
@@ -244,6 +222,22 @@ int _cmd_scan(int argc, char **argv)
     nimble_scanner_stop();
     puts("Done, results:");
     nimble_scanlist_print();
+    puts("");
+
+    return 0;
+}
+
+int _cmd_read(int argc, char **argv)
+{
+
+    if ((argc == 2) && (memcmp(argv[1], "help", 4) == 0)) {
+        printf("usage: %s [timeout in ms]\n", argv[0]);
+
+        return 0;
+    }
+
+    ble_gattc_read(m_connection_handle, m_attr_handle,
+		    heart_rate_attr_cb, NULL);
     puts("");
 
     return 0;
@@ -294,6 +288,7 @@ static const shell_command_t _commands[] = {
     { "scan", "trigger a BLE scan", _cmd_scan },
     { "connect", "trigger a BLE scan", _cmd_connect },
     { "disconnect", "disconnect from device", _cmd_disconnect },
+    { "read", "read from device", _cmd_read },
     { NULL, NULL, NULL }
 };
 
@@ -302,6 +297,7 @@ int main(void)
     puts("NimBLE Scanner Example Application");
     puts("Type `scan help` for more information");
 
+    ble_gattc_init();
     /* start shell */
     char line_buf[SHELL_DEFAULT_BUFSIZE];
     shell_run(_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
@@ -314,7 +310,7 @@ static int heart_rate_attr_cb(uint16_t conn_handle,
                              struct ble_gatt_attr *attr,
                              void *arg)
 {
-	puts("gattc event");
+	puts("heart rate event");
 	(void)conn_handle;
 	(void)arg;
 	uint16_t counter;
@@ -342,21 +338,24 @@ static int find_heart_rate_chr_cb(uint16_t conn_handle,
 	puts("chr event");
 	(void)conn_handle;
 	(void)arg;
-	if ( error->status != 0 )
-	{
-		printf("error 0x%x\n", error->status);
-	}
-	else
-	{
-		
-		ble_gattc_read(m_connection_handle, chr->def_handle,
+		m_attr_handle = chr->properties;
+		ble_gattc_read(m_connection_handle, m_attr_handle,
 				heart_rate_attr_cb, NULL);
-
-	}
-	//uint16_t counter;
-	//
+		printf("error 0x%x\n", error->status);
 
 //int ble_gatts_notify(uint16_t conn_handle, uint16_t chr_val_handle);
 return 0;
 
 }
+
+//static int gatt_mtu_cb(uint16_t conn_handle,
+//                            const struct ble_gatt_error *error,
+//                            uint16_t mtu, void *arg)
+//{
+//	(void)conn_handle;
+//	(void)arg;
+//	(void)error;
+//	(void)mtu;
+//
+//	return 0;
+//}
