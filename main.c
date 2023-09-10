@@ -181,15 +181,14 @@ conn_event(struct ble_gap_event *event, void *arg)
 			receiveCounter++;
 
 			printf("receiveCounter: %u\n", receiveCounter);
-			printf("notify rx, attr_handle: %u\n",event->notify_rx.attr_handle);
-			printf("notify rx, event->notify_rx.om->om_flags %u\n",event->notify_rx.om->om_flags);
-			uint8_t counter;
-			for (counter = 0; counter < event->notify_rx.om->om_len; counter++)
-			{
-				printf("%x", event->notify_rx.om->om_data[counter]);
-			}
+			//uint8_t counter;
+			//for (counter = 0; counter < event->notify_rx.om->om_len; counter++)
+			//{
+			//	printf("%x", event->notify_rx.om->om_data[counter]);
+			//}
 
-			puts("\n");
+			printf("Heart rate: %d\n", event->notify_rx.om->om_data[1]);
+
 			break;
 		case BLE_GAP_EVENT_MTU:
 			ble_gattc_disc_svc_by_uuid(m_conn_out_desc.conn_handle, &predef_uuid.u, gatt_discovery_cb, NULL);
@@ -539,7 +538,7 @@ static int _cmd_notify(int argc, char **argv)
 	else
 	{
 		value[0] = 1;
-		notifying = false;
+		notifying = true;
 	}
 
 	value[1] = 0;
