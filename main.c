@@ -49,6 +49,8 @@ static uint16_t m_heart_rate_start_handle;
 static uint16_t m_heart_rate_end_handle;
 static uint16_t not_handle;
 
+static bool notifying;
+
 static uint8_t own_addr_type;
 
 static struct ble_gap_conn_desc m_conn_out_desc;
@@ -91,33 +93,6 @@ static int heart_rate_service_dscr_cb(uint16_t conn_handle,
 /* scan_event() calls scan(), so forward declaration is required */
 static void scan(void);
 
-static int gatt_discovery_cb(uint16_t conn_handle,
-		const struct ble_gatt_error *error,
-		const struct ble_gatt_svc *service,
-		void *arg)
-{
-	(void)arg;
-	(void)conn_handle;
-
-		int uuid_cmp_result = ble_uuid_cmp(&predef_uuid.u, &service->uuid.u16.u);
-		if( uuid_cmp_result == 0)
-		{
-			puts("service found\n");
-			m_heart_rate_start_handle = service->start_handle;
-			m_heart_rate_end_handle = service->end_handle;
-			printf("heart rate start handle %u, end handle %u", m_heart_rate_start_handle, m_heart_rate_end_handle );
-		}
-		if ( error->status == BLE_HS_EDONE )
-		{
-
-			ble_gattc_disc_all_chrs(m_conn_out_desc.conn_handle,m_heart_rate_start_handle,
-					m_heart_rate_end_handle, find_heart_rate_chr_cb, NULL);
-		}
-
-	printf("discovery event error 0x%x\n", error->status);
-
-	return 0;
-}
 /* connection has separate event handler from scan */
 	static int
 conn_event(struct ble_gap_event *event, void *arg)
@@ -213,27 +188,12 @@ conn_event(struct ble_gap_event *event, void *arg)
 			{
 				printf("%x", event->notify_rx.om->om_data[counter]);
 			}
-//			if (receiveCounter%10 == 0)
-//			{
-//
-//				printf("Update params\n");
-//
-//				static struct ble_gap_upd_params params;
-//
-//				params.itvl_max = BLE_GAP_CONN_ITVL_MS(1000);
-//				params.itvl_min = BLE_GAP_CONN_ITVL_MS(1000);
-//				params.latency = 2;
-//				params.max_ce_len = 0;
-//				params.min_ce_len = 0;
-//				params.supervision_timeout = 600;
-//
-//				ble_gap_update_params(event->notify_rx.conn_handle, &params);
-//			}
 
 			puts("\n");
 			break;
 		case BLE_GAP_EVENT_MTU:
-			//ble_gattc_disc_svc_by_uuid(m_conn_out_desc.conn_handle, &predef_uuid.u, gatt_discovery_cb, NULL);
+			ble_gattc_disc_svc_by_uuid(m_conn_out_desc.conn_handle, &predef_uuid.u, gatt_discovery_cb, NULL);
+			//ble_gattc_disc_all_svcs(m_conn_out_desc.conn_handle, gatt_discovery_cb, NULL);
 			break;
 		default:
 			printf("Connection event type not supported, %d\n",
@@ -243,8 +203,7 @@ conn_event(struct ble_gap_event *event, void *arg)
 	return 0;
 }
 
-	static int
-scan_event(struct ble_gap_event *event, void *arg)
+static int scan_event(struct ble_gap_event *event, void *arg)
 {
 	(void)arg;
 	struct ble_hs_adv_fields parsed_fields;
@@ -571,7 +530,18 @@ static int _cmd_notify(int argc, char **argv)
 	puts("Trying to connect");
 
 	static uint8_t value[2];
-	value[0] = 1;
+
+	if ( notifying == true)
+	{
+		value[0] = 0;
+		notifying = false;
+	}
+	else
+	{
+		value[0] = 1;
+		notifying = false;
+	}
+
 	value[1] = 0;
 	rc = ble_gattc_write_flat(m_conn_out_desc.conn_handle, not_handle,
 			value, 2, blecent_on_subscribe, NULL);
@@ -604,6 +574,34 @@ static int _cmd_discover(int argc, char **argv)
 		puts("Discovery not started\n");
 	}
 	puts("");
+
+	return 0;
+}
+
+static int gatt_discovery_cb(uint16_t conn_handle,
+		const struct ble_gatt_error *error,
+		const struct ble_gatt_svc *service,
+		void *arg)
+{
+	(void)arg;
+	(void)conn_handle;
+
+		int uuid_cmp_result = ble_uuid_cmp(&predef_uuid.u, &service->uuid.u16.u);
+		if( uuid_cmp_result == 0)
+		{
+			puts("service found\n");
+			m_heart_rate_start_handle = service->start_handle;
+			m_heart_rate_end_handle = service->end_handle;
+			printf("heart rate start handle %u, end handle %u", m_heart_rate_start_handle, m_heart_rate_end_handle );
+		}
+		if ( error->status == BLE_HS_EDONE )
+		{
+
+			ble_gattc_disc_all_chrs(m_conn_out_desc.conn_handle,m_heart_rate_start_handle,
+					m_heart_rate_end_handle, find_heart_rate_chr_cb, NULL);
+		}
+
+	printf("discovery event error 0x%x\n", error->status);
 
 	return 0;
 }
